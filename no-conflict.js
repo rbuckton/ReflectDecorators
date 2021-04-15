@@ -30,14 +30,37 @@ var Reflect;
                 return undefined;
             }
         })();
-        var exporter = makeExporter(Reflect);
-        if (typeof root.Reflect === "undefined") {
-            root.Reflect = Reflect;
+        var nativeReflect = root === null || root === void 0 ? void 0 : root.Reflect;
+        // do not mutate the global `Reflect`
+        var reflectObj;
+        if (nativeReflect === undefined || nativeReflect === Reflect && "get" in Reflect) {
+            reflectObj = {};
         }
         else {
-            exporter = makeExporter(root.Reflect, exporter);
+            reflectObj = Object.create(nativeReflect);
         }
-        factory(exporter);
+        var exporter = makeExporter(reflectObj);
+        if (typeof module === "object" && typeof module.exports === "object") {
+            // CommonJS module
+            factory(makeExporter(module.exports, exporter), nativeReflect);
+            finishModule(module.exports);
+        }
+        else if (typeof define === "function" && define.amd) {
+            // AMD module
+            define(["exports"], function (exports) {
+                factory(makeExporter(exports, exporter), nativeReflect);
+                finishModule(exports);
+            });
+        }
+        else {
+            // Global script
+            throw new Error("Module format not supported.");
+        }
+        function finishModule(exports) {
+            exports.Reflect = reflectObj;
+            exports.default = reflectObj;
+            Object.defineProperty(exports, "__esModule", { value: true });
+        }
         function makeExporter(target, previous) {
             return function (key, value) {
                 if (typeof target[key] !== "function") {
@@ -47,7 +70,32 @@ var Reflect;
                     previous(key, value);
             };
         }
-    })(function (exporter) {
+    })(function (exporter, nativeReflect) {
+        if (typeof nativeReflect === "object") {
+            var API_KEYS = [
+                "decorate",
+                "metadata",
+                "defineMetadata",
+                "hasMetadata",
+                "hasOwnMetadata",
+                "getMetadata",
+                "getOwnMetadata",
+                "getMetadataKeys",
+                "getOwnMetadataKeys",
+                "deleteMetadata"
+            ];
+            if (API_KEYS.every(function (key) { return typeof nativeReflect[key] === "function"; })) {
+                // Defer to the existing global shim so that metadata state is shared.
+                // NOTE: This assumes both the global shim and this "no-conflict" version have the
+                //       same implementation. This is highly likely as the proposed API has remained
+                //       stable for some time.
+                for (var _i = 0, API_KEYS_1 = API_KEYS; _i < API_KEYS_1.length; _i++) {
+                    var key = API_KEYS_1[_i];
+                    exporter(key, nativeReflect[key]);
+                }
+                return;
+            }
+        }
         var uncurryThis = Function.prototype.bind.bind(Function.prototype.call);
         // feature test for Symbol support
         var supportsSymbol = typeof Symbol === "function";
@@ -1160,4 +1208,4 @@ var Reflect;
         }
     });
 })(Reflect || (Reflect = {}));
-//# sourceMappingURL=Reflect.js.map
+//# sourceMappingURL=no-conflict.js.map
